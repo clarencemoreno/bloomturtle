@@ -3,6 +3,7 @@ package ratelimiter
 import (
 	"context"
 	"sync"
+	"time"
 
 	"github.com/clarencemoreno/bloomturtle/internal/event"
 )
@@ -10,7 +11,7 @@ import (
 // RateLimiter is a basic rate limiter implementation.
 type RateLimiter struct {
 	mu        sync.Mutex
-	bitmap    []bool
+	bitmap    []uint32
 	hashFuncs []func([]byte) uint
 	eventPub  *event.BaseEventPublisher
 	capacity  int
@@ -19,13 +20,13 @@ type RateLimiter struct {
 }
 
 // New creates a new RateLimiter.
-func New(capacity uint, hashFuncs []func([]byte) uint) *RateLimiter {
+func New(capacity uint, hashFuncs []func([]byte) uint, threshold uint) *RateLimiter {
 	rl := &RateLimiter{
-		bitmap:    make([]bool, capacity),
+		bitmap:    make([]uint32, capacity),
 		hashFuncs: hashFuncs,
-		capacity:  int(capacity), // Convert uint to int
+		capacity:  int(capacity),
 		eventPub:  event.NewBaseEventPublisher(),
-		threshold: int(capacity), // Convert uint to int
+		threshold: int(threshold),
 	}
 	rl.eventPub.Start()
 	return rl
@@ -38,12 +39,20 @@ func (rl *RateLimiter) Add(data []byte) error {
 
 	for _, hashFunc := range rl.hashFuncs {
 		index := hashFunc(data) % uint(len(rl.bitmap))
-		rl.bitmap[index] = true
+		rl.bitmap[index]++ // Increment the counter at the index
 	}
 
 	rl.count++
 	if rl.count >= rl.threshold {
-		rl.eventPub.PublishEvent(RateLimitEvent{Message: "Rate limit reached"})
+		err := rl.eventPub.PublishEvent(RateLimitEvent{
+			Message: "Rate limit reached",
+			Key:     string(data), // Assuming the data represents the key
+			// Set an appropriate expiration timestamp if needed
+			ExpirationTimestamp: time.Now().Add(10 * time.Minute), // Example timestamp
+		})
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -56,13 +65,11 @@ func (rl *RateLimiter) Contains(data []byte) (bool, error) {
 
 	for _, hashFunc := range rl.hashFuncs {
 		index := hashFunc(data) % uint(len(rl.bitmap))
-		// Check if the data is present at the index
-		if rl.bitmap[index] {
-			return true, nil // Data is present, return true
+		if rl.bitmap[index] > 0 {
+			return true, nil // Data is likely present, return true
 		}
 	}
 
-	// If none of the hash functions indicate the data is present, return false
 	return false, nil
 }
 
@@ -76,7 +83,9 @@ func (rl *RateLimiter) Shutdown(ctx context.Context) error {
 	return rl.eventPub.Shutdown(ctx)
 }
 
-// RateLimitEvent represents an event when the rate limit is reached.
+// RateLimitEvent struct for rate limit events.
 type RateLimitEvent struct {
-	Message string // Fixed the syntax error here
+	Key                 string
+	Message             string
+	ExpirationTimestamp time.Time
 }

@@ -23,8 +23,7 @@ func TestMainFunction(t *testing.T) {
 		},
 	}
 
-	rl := bloomturtle.NewRateLimiter(1000, hashFuncs)
-	// Call Shutdown only once at the end of the test
+	rl := bloomturtle.NewRateLimiter(1000, hashFuncs, 50)
 	defer rl.Shutdown(context.Background())
 
 	data := []byte("data0")
@@ -41,7 +40,6 @@ func TestMainFunction(t *testing.T) {
 		t.Errorf("expected data0 to be contained in the rate limiter")
 	}
 
-	// Add data100 to the rate limiter
 	err = rl.Add([]byte("data100"))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
