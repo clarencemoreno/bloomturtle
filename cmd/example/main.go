@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/clarencemoreno/bloomturtle"
@@ -8,13 +9,40 @@ import (
 
 func main() {
 	hashFuncs := []func([]byte) uint{
-		func(data []byte) uint { /* hash function 1 */ return 0 },
-		func(data []byte) uint { /* hash function 2 */ return 1 },
+		func(data []byte) uint { return uint(data[0]) },
+		func(data []byte) uint { return uint(data[1]) },
 	}
 
-	bf := bloomturtle.NewBloomFilter(1000, hashFuncs)
+	rl := bloomturtle.NewRateLimiter(1000, hashFuncs)
+	sk := bloomturtle.NewStorekeeper()
 
-	bf.Add([]byte("hello"))
-	fmt.Println(bf.Contains([]byte("hello"))) // Output: true
-	fmt.Println(bf.Contains([]byte("world"))) // Output: false
+	// Register storekeeper as an event listener
+	rl.AddListener(sk)
+
+	for i := 0; i < 100; i++ {
+		if err := rl.Add([]byte(fmt.Sprintf("data%d", i))); err != nil {
+			fmt.Printf("error adding data: %v\n", err)
+		}
+	}
+
+	contains, err := rl.Contains([]byte("data0"))
+	if err != nil {
+		fmt.Printf("error checking data: %v\n", err)
+	}
+	fmt.Println(contains) // Output: true
+
+	contains, err = rl.Contains([]byte("data100"))
+	if err != nil {
+		fmt.Printf("error checking data: %v\n", err)
+	}
+	fmt.Println(contains) // Output: false
+
+	// Give some time for the asynchronous event handling to complete
+	fmt.Println("Press Enter to shutdown...")
+	fmt.Scanln()
+
+	// Shutdown the event publisher gracefully
+	if err := rl.Shutdown(context.Background()); err != nil {
+		fmt.Printf("error shutting down: %v\n", err)
+	}
 }
