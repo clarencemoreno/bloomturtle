@@ -3,12 +3,10 @@ package event
 import (
 	"context"
 	"errors"
-	"sync"
 )
 
 // BaseEventPublisher is a basic event publisher implementation.
 type BaseEventPublisher struct {
-	mu        sync.Mutex
 	eventChan chan Event
 	listeners []EventListener
 	ctx       context.Context
@@ -34,11 +32,10 @@ func (p *BaseEventPublisher) Start() {
 
 // PublishEvent publishes an event to all listeners.
 func (p *BaseEventPublisher) PublishEvent(event Event) error {
-	p.mu.Lock()
-	defer p.mu.Unlock()
 	if p.closed {
 		return ErrPublisherClosed
 	}
+
 	select {
 	case p.eventChan <- event:
 		return nil
@@ -49,22 +46,17 @@ func (p *BaseEventPublisher) PublishEvent(event Event) error {
 
 // AddListener adds an event listener to the publisher.
 func (p *BaseEventPublisher) AddListener(listener EventListener) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
 	p.listeners = append(p.listeners, listener)
 }
 
 // Shutdown stops the event publisher and waits for it to finish.
 func (p *BaseEventPublisher) Shutdown(ctx context.Context) error {
-	p.mu.Lock()
 	if p.closed {
-		p.mu.Unlock()
 		return ErrPublisherClosed
 	}
 	p.cancel()
 	close(p.eventChan)
 	p.closed = true
-	p.mu.Unlock()
 
 	// Wait for the run goroutine to finish
 	select {
@@ -82,11 +74,9 @@ func (p *BaseEventPublisher) run() {
 			if !ok {
 				return // Channel closed, exit goroutine
 			}
-			p.mu.Lock()
 			for _, listener := range p.listeners {
 				listener.HandleEvent(p.ctx, event)
 			}
-			p.mu.Unlock()
 		case <-p.ctx.Done():
 			return
 		}

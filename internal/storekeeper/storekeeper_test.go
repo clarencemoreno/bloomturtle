@@ -57,6 +57,7 @@ func TestStorekeeper_Check(t *testing.T) {
 	event := ratelimiter.RateLimitEvent{
 		Key:                 "key",
 		Message:             "Rate limit reached",
+		Timestamp:           time.Now(),
 		ExpirationTimestamp: time.Now().Add(1 * time.Hour), // Set expiration to 1 hour in the future
 	}
 

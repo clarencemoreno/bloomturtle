@@ -2,54 +2,50 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"testing"
+	"time"
 
 	"github.com/clarencemoreno/bloomturtle"
+	"github.com/clarencemoreno/bloomturtle/internal/event"
 )
 
 func TestMainFunction(t *testing.T) {
-	hashFuncs := []func([]byte) uint{
-		func(data []byte) uint {
-			if len(data) > 0 {
-				return uint(data[0])
-			}
-			return 0
-		},
-		func(data []byte) uint {
-			if len(data) > 1 {
-				return uint(data[1])
-			}
-			return 0
-		},
-	}
+	// Define the RateLimiter parameters
+	primaryCapacity := 10
+	secondaryCapacity := 5
+	rate := 1 // Tokens per second
 
-	rl := bloomturtle.NewRateLimiter(1000, hashFuncs, 50)
+	// Create the RateLimiter
+	rl := bloomturtle.NewRateLimiter(primaryCapacity, secondaryCapacity, rate)
 	defer rl.Shutdown(context.Background())
 
-	data := []byte("data0")
-	err := rl.Add(data)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	// Create the Event Publisher
+	eventPublisher := event.NewBaseEventPublisher()
+	defer eventPublisher.Shutdown(context.Background())
+
+	// Create the Storekeeper and add it as a listener
+	sk := bloomturtle.NewStorekeeper(eventPublisher)
+	rl.AddListener(sk)
+
+	// Track whether any request was denied
+	var denied bool
+
+	// Simulate requests
+	for i := 0; i < 150; i++ {
+		key := fmt.Sprintf("key-%d", i)
+		if allowed := rl.Allow(key); allowed {
+			t.Logf("Request allowed: %s", key)
+		} else {
+			t.Logf("Request denied: %s", key)
+			denied = true
+			break
+		}
+		time.Sleep(100 * time.Millisecond) // Adding delay to simulate time passage
 	}
 
-	contains, err := rl.Contains(data)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if !contains {
-		t.Errorf("expected data0 to be contained in the rate limiter")
-	}
-
-	err = rl.Add([]byte("data100"))
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	contains, err = rl.Contains([]byte("data100"))
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if !contains {
-		t.Errorf("expected data100 to be contained in the rate limiter")
+	// Assert that at least one request was denied
+	if !denied {
+		t.Errorf("Expected at least one request to be denied")
 	}
 }

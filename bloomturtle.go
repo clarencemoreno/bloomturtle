@@ -7,8 +7,8 @@ import (
 )
 
 // NewRateLimiter creates a new RateLimiter
-func NewRateLimiter(size uint, hashFuncs []func([]byte) uint, threshold uint) *ratelimiter.RateLimiter {
-	return ratelimiter.New(size, hashFuncs, threshold)
+func NewRateLimiter(primaryCapacity int, secondaryCapacity int, rate int) *ratelimiter.RateLimiter {
+	return ratelimiter.NewRateLimiter(primaryCapacity, secondaryCapacity, rate)
 }
 
 // NewStorekeeper creates a new Storekeeper with an EventPublisher

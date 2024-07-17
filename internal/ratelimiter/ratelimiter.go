@@ -8,69 +8,80 @@ import (
 	"github.com/clarencemoreno/bloomturtle/internal/event"
 )
 
-// RateLimiter is a basic rate limiter implementation.
+// RateLimiter controls the rate of requests using a two-bucket leaky bucket algorithm
 type RateLimiter struct {
-	mu        sync.Mutex
-	bitmap    []uint32
-	hashFuncs []func([]byte) uint
-	eventPub  *event.BaseEventPublisher
-	capacity  int
-	count     int
-	threshold int
+	primaryCapacity   int       // Capacity of the primary bucket
+	secondaryCapacity int       // Capacity of the secondary bucket (leaky bucket)
+	rate              int       // Refill rate of the secondary bucket (tokens per second)
+	primaryTokens     int       // Current number of tokens in the primary bucket
+	secondaryTokens   int       // Current number of tokens in the secondary bucket
+	lastRefillTime    time.Time // Last time the buckets were refilled
+	eventPub          *event.BaseEventPublisher
+	mutex             sync.Mutex // Mutex to synchronize access to the rate limiter
 }
 
-// New creates a new RateLimiter.
-func New(capacity uint, hashFuncs []func([]byte) uint, threshold uint) *RateLimiter {
+// NewRateLimiter creates a new RateLimiter with the specified capacities and refill rate
+func NewRateLimiter(primaryCapacity int, secondaryCapacity int, rate int) *RateLimiter {
 	rl := &RateLimiter{
-		bitmap:    make([]uint32, capacity),
-		hashFuncs: hashFuncs,
-		capacity:  int(capacity),
-		eventPub:  event.NewBaseEventPublisher(),
-		threshold: int(threshold),
+		primaryCapacity:   primaryCapacity,
+		secondaryCapacity: secondaryCapacity,
+		rate:              rate,
+		primaryTokens:     primaryCapacity,   // Initially, the primary bucket is full
+		secondaryTokens:   secondaryCapacity, // Initially, the secondary bucket is full
+		lastRefillTime:    time.Now(),
+		eventPub:          event.NewBaseEventPublisher(),
 	}
 	rl.eventPub.Start()
 	return rl
 }
 
-// Add adds data to the rate limiter.
-func (rl *RateLimiter) Add(data []byte) error {
-	rl.mu.Lock()
-	defer rl.mu.Unlock()
-
-	for _, hashFunc := range rl.hashFuncs {
-		index := hashFunc(data) % uint(len(rl.bitmap))
-		rl.bitmap[index]++ // Increment the counter at the index
-	}
-
-	rl.count++
-	if rl.count >= rl.threshold {
-		err := rl.eventPub.PublishEvent(RateLimitEvent{
-			Message: "Rate limit reached",
-			Key:     string(data), // Assuming the data represents the key
-			// Set an appropriate expiration timestamp if needed
-			ExpirationTimestamp: time.Now().Add(10 * time.Minute), // Example timestamp
-		})
-		if err != nil {
-			return err
+// refill refills the secondary bucket first, then the primary bucket if the secondary is full
+func (rl *RateLimiter) refill() {
+	now := time.Now()
+	elapsed := now.Sub(rl.lastRefillTime).Seconds()
+	newTokens := int(elapsed * float64(rl.rate))
+	if newTokens > 0 {
+		rl.secondaryTokens += newTokens
+		if rl.secondaryTokens > rl.secondaryCapacity {
+			excessTokens := rl.secondaryTokens - rl.secondaryCapacity
+			rl.secondaryTokens = rl.secondaryCapacity
+			rl.primaryTokens += excessTokens
+			if rl.primaryTokens > rl.primaryCapacity {
+				rl.primaryTokens = rl.primaryCapacity
+			}
 		}
+		rl.lastRefillTime = now
 	}
-
-	return nil
 }
 
-// Contains checks if data is contained in the rate limiter.
-func (rl *RateLimiter) Contains(data []byte) (bool, error) {
-	rl.mu.Lock()
-	defer rl.mu.Unlock()
+// Allow checks if a request can be processed
+func (rl *RateLimiter) Allow(key string) bool {
+	rl.mutex.Lock()
+	defer rl.mutex.Unlock()
 
-	for _, hashFunc := range rl.hashFuncs {
-		index := hashFunc(data) % uint(len(rl.bitmap))
-		if rl.bitmap[index] > 0 {
-			return true, nil // Data is likely present, return true
-		}
+	rl.refill()
+
+	if rl.primaryTokens > 0 {
+		rl.primaryTokens--
+		return true
+	} else if rl.secondaryTokens > 0 {
+		rl.secondaryTokens--
+		return true
 	}
 
-	return false, nil
+	rl.generateEvent(key)
+	return false
+}
+
+// generateEvent is called when both buckets are exhausted
+func (rl *RateLimiter) generateEvent(key string) {
+	event := RateLimitEvent{
+		Key:                 key,
+		Timestamp:           time.Now(),
+		Message:             "Both primary and secondary buckets are exhausted.",
+		ExpirationTimestamp: time.Now().Add(500 * time.Millisecond), // Expiration timestamp set to 0.5 seconds from now
+	}
+	rl.eventPub.PublishEvent(event)
 }
 
 // AddListener adds an event listener to the rate limiter.
@@ -83,9 +94,10 @@ func (rl *RateLimiter) Shutdown(ctx context.Context) error {
 	return rl.eventPub.Shutdown(ctx)
 }
 
-// RateLimitEvent struct for rate limit events.
+// RateLimitEvent represents an event when both buckets are exhausted.
 type RateLimitEvent struct {
 	Key                 string
+	Timestamp           time.Time
 	Message             string
 	ExpirationTimestamp time.Time
 }
