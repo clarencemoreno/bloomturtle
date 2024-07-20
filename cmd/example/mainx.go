@@ -5,18 +5,19 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/clarencemoreno/bloomturtle"
 	"github.com/clarencemoreno/bloomturtle/internal/event"
-	"github.com/clarencemoreno/bloomturtle/internal/ratelimiter_bloom"
 )
 
-func main() {
+func mainx() {
 	// Define the RateLimiter parameters
 	primaryCapacity := 10
 	secondaryCapacity := 5
+
 	rate := 1 // Tokens per second
 
 	// Create the RateLimiter
-	rl := ratelimiter_bloom.NewRateLimiter(primaryCapacity, secondaryCapacity, rate)
+	rl := bloomturtle.NewRateLimiter(primaryCapacity, secondaryCapacity, rate)
 	defer rl.Shutdown(context.Background())
 
 	// Create the Event Publisher
@@ -24,7 +25,7 @@ func main() {
 	defer eventPublisher.Shutdown(context.Background())
 
 	// Create the Storekeeper and add it as a listener
-	sk := ratelimiter_bloom.NewStorekeeper(eventPublisher)
+	sk := bloomturtle.NewStorekeeper(eventPublisher)
 	rl.AddListener(sk)
 
 	// Simulate requests and print results on the same line

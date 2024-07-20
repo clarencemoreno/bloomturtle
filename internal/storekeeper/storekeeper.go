@@ -13,7 +13,7 @@ import (
 
 // Storekeeper struct
 type Storekeeper struct {
-	violatorCache unsafe.Pointer // Pointer to the violator cache
+	violatorCache unsafe.Pointer // Unsafe pointer to the violator cache
 	eventPub      event.EventPublisher
 }
 
@@ -31,8 +31,9 @@ func New(eventPub event.EventPublisher) *Storekeeper {
 
 // Check method checks the key and returns a boolean
 func (sk *Storekeeper) Check(key string) bool {
-	// Atomically load the current violator cache
-	cache := *(*map[string]ratelimiter.RateLimitEvent)(atomic.LoadPointer(&sk.violatorCache))
+	// Load the current violator cache (no atomic operation)
+	cachePtr := (*map[string]ratelimiter.RateLimitEvent)(atomic.LoadPointer(&sk.violatorCache))
+	cache := *cachePtr
 	value, ok := cache[key]
 	if !ok {
 		return false
@@ -79,7 +80,8 @@ func (sk *Storekeeper) handleRateLimitEvent(e ratelimiter.RateLimitEvent) {
 		newCache[e.Key] = e
 
 		// Perform atomic swap
-		if atomic.SwapPointer(&sk.violatorCache, unsafe.Pointer(&newCache)) == oldCachePtr {
+		newCachePtr := unsafe.Pointer(&newCache)
+		if atomic.CompareAndSwapPointer(&sk.violatorCache, oldCachePtr, newCachePtr) {
 			break // Successful swap, exit loop
 		}
 		// If swap failed, another goroutine might have updated the cache, retry

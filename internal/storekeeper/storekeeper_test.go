@@ -9,63 +9,53 @@ import (
 	"github.com/clarencemoreno/bloomturtle/internal/ratelimiter"
 )
 
-// mockEventPublisher is a mock implementation of EventPublisher for testing purposes.
-type mockEventPublisher struct {
-	eventChan chan event.Event
-}
-
-// NewMockEventPublisher creates a new mock EventPublisher.
-func NewMockEventPublisher() *mockEventPublisher {
-	return &mockEventPublisher{
-		eventChan: make(chan event.Event, 10),
-	}
-}
-
-func (m *mockEventPublisher) Start() {
-	go m.run()
-}
-
-func (m *mockEventPublisher) PublishEvent(event event.Event) error {
-	m.eventChan <- event
-	return nil
-}
-
-func (m *mockEventPublisher) AddListener(listener event.EventListener) {
-	// Implement if needed for testing
-}
-
-func (m *mockEventPublisher) Shutdown(ctx context.Context) error {
-	close(m.eventChan)
-	return nil
-}
-
-func (m *mockEventPublisher) run() {
-	for range m.eventChan {
-		// Simulate event processing
-	}
-}
-
+// TestStorekeeper_Check tests the Storekeeper with the actual BaseEventPublisher.
 func TestStorekeeper_Check(t *testing.T) {
-	// Create a mock event publisher
-	mockPublisher := NewMockEventPublisher()
-	defer mockPublisher.Shutdown(context.Background())
+	// Create and start a real BaseEventPublisher
+	basePublisher := event.NewBaseEventPublisher()
+	basePublisher.Start()
+	defer func() {
+		// Ensure the publisher shuts down gracefully
+		if err := basePublisher.Shutdown(context.Background()); err != nil {
+			t.Fatalf("failed to shutdown publisher: %v", err)
+		}
+	}()
 
-	// Create Storekeeper with mock event publisher
-	sk := New(mockPublisher)
+	// Create Storekeeper with the real BaseEventPublisher
+	sk := New(basePublisher)
 
-	// Simulate adding an item to the cache
-	event := ratelimiter.RateLimitEvent{
+	// Check function before publishing the event
+	if sk.Check("key") {
+		t.Errorf("expected Check to return false before publishing the event")
+	}
+
+	// Create a rate limit event
+	limitEvent := ratelimiter.RateLimitEvent{
 		Key:                 "key",
-		Message:             "Rate limit reached",
+		Message:             "Rate limit exceeded",
 		Timestamp:           time.Now(),
-		ExpirationTimestamp: time.Now().Add(1 * time.Hour), // Set expiration to 1 hour in the future
+		ExpirationTimestamp: time.Now().Add(1 * time.Hour),
 	}
 
-	// Add event to the Storekeeper cache
-	sk.handleRateLimitEvent(event)
+	// Register Storekeeper as a listener to the base publisher
+	basePublisher.AddListener(sk)
 
-	// Test Check function
+	// Publish the event
+	err := basePublisher.PublishEvent(limitEvent)
+	if err != nil {
+		t.Fatalf("failed to publish event: %v", err)
+	}
+
+	// Wait for event processing
+	time.Sleep(100 * time.Millisecond) // Adjust if needed based on event processing time
+
+	// Check function after publishing the event
 	if !sk.Check("key") {
-		t.Errorf("expected Check to return true")
+		t.Errorf("expected Check to return true after publishing the event")
 	}
+
+	// // Call shutdown after the final check to ensure proper cleanup
+	// if err := basePublisher.Shutdown(context.Background()); err != nil {
+	// 	t.Fatalf("failed to shutdown publisher: %v", err)
+	// }
 }
