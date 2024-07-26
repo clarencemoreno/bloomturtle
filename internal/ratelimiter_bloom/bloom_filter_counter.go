@@ -10,7 +10,7 @@ import (
 
 // BloomFilterCounter implements a Bloom filter counter.
 type BloomFilterCounter struct {
-	array    []uint32
+	bucket   []uint32 // Renamed from 'array' to 'bucket'
 	size     uint32
 	capacity uint32
 	mu       sync.Mutex
@@ -24,12 +24,12 @@ func NewBloomFilterCounter(size uint32, capacity ...uint32) *BloomFilterCounter 
 		cap = capacity[0]
 	}
 	bfc := &BloomFilterCounter{
-		array:    make([]uint32, size),
+		bucket:   make([]uint32, size),
 		size:     size,
 		capacity: cap,
 	}
-	for i := range bfc.array {
-		bfc.array[i] = cap
+	for i := range bfc.bucket {
+		bfc.bucket[i] = cap
 	}
 	return bfc
 }
@@ -45,7 +45,7 @@ func (bfc *BloomFilterCounter) IncrementWithRetry(key string, count int) {
 		if attempt > 0 {
 			time.Sleep(time.Duration(attempt) * time.Millisecond) // Exponential backoff can be applied here
 		}
-		if atomic.CompareAndSwapUint32(&bfc.array[index], bfc.array[index], bfc.array[index]+uint32(count)) {
+		if atomic.CompareAndSwapUint32(&bfc.bucket[index], bfc.bucket[index], bfc.bucket[index]+uint32(count)) {
 			return
 		}
 		attempt++
@@ -53,7 +53,7 @@ func (bfc *BloomFilterCounter) IncrementWithRetry(key string, count int) {
 	// Fallback to locking mechanism after max attempts
 	bfc.mu.Lock()
 	defer bfc.mu.Unlock()
-	bfc.array[index] += uint32(count)
+	bfc.bucket[index] += uint32(count)
 }
 
 // DecrementWithRetry attempts to decrement the counter for the given key with retry logic.
@@ -66,7 +66,7 @@ func (bfc *BloomFilterCounter) DecrementWithRetry(key string, count int) {
 			time.Sleep(time.Duration(attempt) * time.Millisecond) // Exponential backoff can be applied here
 		}
 		// Read the current value
-		currentValue := atomic.LoadUint32(&bfc.array[index])
+		currentValue := atomic.LoadUint32(&bfc.bucket[index])
 
 		// If the value is already zero, just return
 		if currentValue == 0 {
@@ -80,7 +80,7 @@ func (bfc *BloomFilterCounter) DecrementWithRetry(key string, count int) {
 		}
 
 		// Attempt to decrement the value
-		if atomic.CompareAndSwapUint32(&bfc.array[index], currentValue, newValue) {
+		if atomic.CompareAndSwapUint32(&bfc.bucket[index], currentValue, newValue) {
 			return
 		}
 		attempt++
@@ -91,28 +91,28 @@ func (bfc *BloomFilterCounter) DecrementWithRetry(key string, count int) {
 	defer bfc.mu.Unlock()
 
 	// Recheck value after acquiring the lock
-	if bfc.array[index] == 0 {
+	if bfc.bucket[index] == 0 {
 		return
 	}
 
 	// Calculate the new value after decrementing
-	newValue := bfc.array[index] - uint32(count)
-	if newValue > bfc.array[index] { // Ensure we do not have underflow
+	newValue := bfc.bucket[index] - uint32(count)
+	if newValue > bfc.bucket[index] { // Ensure we do not have underflow
 		newValue = 0
 	}
-	bfc.array[index] = newValue
+	bfc.bucket[index] = newValue
 }
 
 // IsEmpty checks if the counter for the given key is greater than 0.
 func (bfc *BloomFilterCounter) IsEmpty(key string) bool {
 	index := bfc.hash(key) % uint64(bfc.size)
-	return bfc.array[index] == 0
+	return bfc.bucket[index] == 0
 }
 
 // CheckCount checks the count for the given key.
 func (bfc *BloomFilterCounter) CheckCount(key string) int {
 	index := bfc.hash(key) % uint64(bfc.size)
-	return int(bfc.array[index])
+	return int(bfc.bucket[index])
 }
 
 // hash uses a more robust hash function (FNV-1a)
@@ -131,7 +131,7 @@ func (bfc *BloomFilterCounter) IncrementWithRetryDecorator(fn MutatorFunc) Mutat
 			if attempt > 0 {
 				time.Sleep(time.Duration(attempt) * time.Millisecond) // Exponential backoff can be applied here
 			}
-			if atomic.CompareAndSwapUint32(&bfc.array[bfc.hash(key)%uint64(bfc.size)], bfc.array[bfc.hash(key)%uint64(bfc.size)], bfc.array[bfc.hash(key)%uint64(bfc.size)]+uint32(count)) {
+			if atomic.CompareAndSwapUint32(&bfc.bucket[bfc.hash(key)%uint64(bfc.size)], bfc.bucket[bfc.hash(key)%uint64(bfc.size)], bfc.bucket[bfc.hash(key)%uint64(bfc.size)]+uint32(count)) {
 				return
 			}
 			attempt++
@@ -153,7 +153,7 @@ func (bfc *BloomFilterCounter) DecrementWithRetryDecorator(fn MutatorFunc) Mutat
 				time.Sleep(time.Duration(attempt) * time.Millisecond) // Exponential backoff can be applied here
 			}
 			// Read the current value
-			currentValue := atomic.LoadUint32(&bfc.array[index])
+			currentValue := atomic.LoadUint32(&bfc.bucket[index])
 
 			// If the value is already zero, just return
 			if currentValue == 0 {
@@ -167,7 +167,7 @@ func (bfc *BloomFilterCounter) DecrementWithRetryDecorator(fn MutatorFunc) Mutat
 			}
 
 			// Attempt to decrement the value
-			if atomic.CompareAndSwapUint32(&bfc.array[index], currentValue, newValue) {
+			if atomic.CompareAndSwapUint32(&bfc.bucket[index], currentValue, newValue) {
 				return
 			}
 			attempt++
@@ -184,8 +184,8 @@ func (bfc *BloomFilterCounter) Decrement(key string, count int) {
 	bfc.mu.Lock()
 	defer bfc.mu.Unlock()
 	// No value of uint32 is less than zero
-	if bfc.array[index] > 0 {
-		bfc.array[index] -= uint32(count)
+	if bfc.bucket[index] > 0 {
+		bfc.bucket[index] -= uint32(count)
 	}
 	// Zero or less: no op
 }
@@ -195,7 +195,7 @@ func (bfc *BloomFilterCounter) Increment(key string, count int) {
 	index := bfc.hash(key) % uint64(bfc.size)
 	bfc.mu.Lock()
 	defer bfc.mu.Unlock()
-	if bfc.array[index] < math.MaxUint32 {
-		bfc.array[index] += uint32(count)
+	if bfc.bucket[index] < math.MaxUint32 {
+		bfc.bucket[index] += uint32(count)
 	}
 }

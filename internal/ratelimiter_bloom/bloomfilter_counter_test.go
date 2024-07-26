@@ -31,8 +31,8 @@ func TestConcurrentIncrement(t *testing.T) {
 	// The expected count should be the initial capacity plus the total increments
 	expectedCount := uint32(capacity) + uint32(numGoroutines*incrementCount)
 
-	if bfc.array[index] != expectedCount {
-		t.Errorf("Expected array[%d] to be %d, got %d", index, expectedCount, bfc.array[index])
+	if bfc.bucket[index] != expectedCount {
+		t.Errorf("Expected array[%d] to be %d, got %d", index, expectedCount, bfc.bucket[index])
 	}
 }
 
@@ -99,15 +99,15 @@ func TestConcurrentMultipleKeys(t *testing.T) {
 		index := bfc.hash(key) % uint64(bfc.size)
 		expectedCount := uint32(capacity) + uint32(numGoroutines*incrementCount)
 
-		if bfc.array[index] != expectedCount {
-			t.Errorf("For key '%s': Expected array[%d] to be %d, got %d", key, index, expectedCount, bfc.array[index])
+		if bfc.bucket[index] != expectedCount {
+			t.Errorf("For key '%s': Expected array[%d] to be %d, got %d", key, index, expectedCount, bfc.bucket[index])
 		}
 	}
 
 	// Verify that untouched slots have initial capacity
 	expectedInitialCapacity := uint32(capacity)
 	for i := 0; i < int(size); i++ {
-		if bfc.array[i] != expectedInitialCapacity {
+		if bfc.bucket[i] != expectedInitialCapacity {
 			// Check if this slot corresponds to any of the keys
 			found := false
 			for _, key := range keys {
@@ -117,7 +117,7 @@ func TestConcurrentMultipleKeys(t *testing.T) {
 				}
 			}
 			if !found {
-				t.Errorf("Untouched slot %d should have initial capacity %d, got %d", i, capacity, bfc.array[i])
+				t.Errorf("Untouched slot %d should have initial capacity %d, got %d", i, capacity, bfc.bucket[i])
 			}
 		}
 	}
@@ -150,8 +150,8 @@ func TestConcurrentIncrementWithRetry(t *testing.T) {
 	// The expected count should be the initial capacity plus the total increments
 	expectedCount := uint32(capacity) + uint32(numGoroutines*incrementCount)
 
-	if bfc.array[index] != expectedCount {
-		t.Errorf("Expected array[%d] to be %d, got %d", index, expectedCount, bfc.array[index])
+	if bfc.bucket[index] != expectedCount {
+		t.Errorf("Expected array[%d] to be %d, got %d", index, expectedCount, bfc.bucket[index])
 	}
 }
 
@@ -245,15 +245,15 @@ func TestConcurrentMultipleKeysIncrementWithRetry(t *testing.T) {
 		index := bfc.hash(key) % uint64(bfc.size)
 		expectedCount := uint32(capacity) + uint32(numGoroutines*incrementCount)
 
-		if bfc.array[index] != expectedCount {
-			t.Errorf("For key '%s': Expected array[%d] to be %d, got %d", key, index, expectedCount, bfc.array[index])
+		if bfc.bucket[index] != expectedCount {
+			t.Errorf("For key '%s': Expected array[%d] to be %d, got %d", key, index, expectedCount, bfc.bucket[index])
 		}
 	}
 
 	// Verify that untouched slots have initial capacity
 	expectedInitialCapacity := uint32(capacity)
 	for i := 0; i < int(size); i++ {
-		if bfc.array[i] != expectedInitialCapacity {
+		if bfc.bucket[i] != expectedInitialCapacity {
 			// Check if this slot corresponds to any of the keys
 			found := false
 			for _, key := range keys {
@@ -263,7 +263,7 @@ func TestConcurrentMultipleKeysIncrementWithRetry(t *testing.T) {
 				}
 			}
 			if !found {
-				t.Errorf("Untouched slot %d should have initial capacity %d, got %d", i, capacity, bfc.array[i])
+				t.Errorf("Untouched slot %d should have initial capacity %d, got %d", i, capacity, bfc.bucket[i])
 			}
 		}
 	}
