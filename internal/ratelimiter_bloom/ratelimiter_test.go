@@ -21,7 +21,7 @@ func (mel *MockEventListener) HandleEvent(ctx context.Context, e event.Event) er
 }
 
 func TestRateLimiter(t *testing.T) {
-	capacity := uint32(5)
+	capacity := uint32(10)
 	rate := 2
 
 	rl := NewRateLimiter(capacity, rate)

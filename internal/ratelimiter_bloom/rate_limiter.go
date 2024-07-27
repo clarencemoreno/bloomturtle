@@ -75,6 +75,7 @@ func (rl *RateLimiter) Allow(key string) bool {
 
 	if !rl.tokens.IsEmpty(key) {
 		rl.tokens.DecrementWithRetry(key, 1)
+		println("allowed")
 		return true
 	}
 
