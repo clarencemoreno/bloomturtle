@@ -14,58 +14,50 @@ type MockEventListener struct {
 }
 
 func (mel *MockEventListener) HandleEvent(ctx context.Context, e event.Event) error {
+	println("Handle Rate Limit exceeded")
 	mel.receivedEvents = append(mel.receivedEvents, e)
+	println("No. of events", len(mel.receivedEvents))
 	return nil
 }
 
 func TestRateLimiter(t *testing.T) {
-	primaryCapacity := 5
-	secondaryCapacity := 3
+	capacity := uint32(5)
 	rate := 2
 
-	rl := NewRateLimiter(primaryCapacity, secondaryCapacity, rate)
+	rl := NewRateLimiter(capacity, rate)
 
 	mockListener := &MockEventListener{}
 	rl.AddListener(mockListener)
 
 	key := "testKey"
 
-	// Test initial state with primary tokens full
-	for i := 0; i < primaryCapacity; i++ {
+	// Test initial state with tokens full
+	for i := 0; i < int(capacity); i++ {
 		if !rl.Allow(key) {
 			t.Errorf("Expected request %d to be allowed, but it was denied", i+1)
 		}
 	}
 
-	// Test transition to secondary tokens
-	for i := 0; i < secondaryCapacity; i++ {
-		if !rl.Allow(key) {
-			t.Errorf("Expected request %d to be allowed, but it was denied", primaryCapacity+i+1)
-		}
-	}
-
-	// Test exhaustion of both buckets
+	// Test exhaustion of tokens
 	if rl.Allow(key) {
 		t.Errorf("Expected request to be denied, but it was allowed")
 	}
-
+	println("here: no of events", len(mockListener.receivedEvents))
 	// Check if the event was generated
+	// Give it time to finish generating the event
+	time.Sleep(10 * time.Millisecond) // Wait for at least one token to be refilled
+
 	if len(mockListener.receivedEvents) != 1 {
 		t.Errorf("Expected 1 event to be generated, but got %d", len(mockListener.receivedEvents))
 	}
 
 	event := mockListener.receivedEvents[0].(RateLimitEvent)
+
 	if event.Key != key {
 		t.Errorf("Expected event key to be %s, but got %s", key, event.Key)
 	}
 
-	// Test refill mechanism
 	time.Sleep(1 * time.Second) // Wait for at least one token to be refilled
-
-	mutex := rl.getMutex(key)
-	mutex.Lock()
-	rl.refill(key)
-	mutex.Unlock()
 
 	if !rl.Allow(key) {
 		t.Errorf("Expected request to be allowed after refill, but it was denied")
