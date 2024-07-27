@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/clarencemoreno/bloomturtle/internal/event"
-	"github.com/clarencemoreno/bloomturtle/internal/ratelimiter"
+	"github.com/clarencemoreno/bloomturtle/internal/ratelimiter_bloom"
 )
 
 // TestStorekeeper_Check tests the Storekeeper with the actual BaseEventPublisher.
@@ -33,7 +33,7 @@ func TestStorekeeper_Check(t *testing.T) {
 	}
 
 	// Create a rate limit event
-	limitEvent := ratelimiter.RateLimitEvent{
+	limitEvent := ratelimiter_bloom.RateLimitEvent{
 		Key:                 "key",
 		Message:             "Rate limit exceeded",
 		Timestamp:           time.Now(),

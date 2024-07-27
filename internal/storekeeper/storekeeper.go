@@ -9,6 +9,7 @@ import (
 
 	"github.com/clarencemoreno/bloomturtle/internal/event"
 	"github.com/clarencemoreno/bloomturtle/internal/ratelimiter"
+	"github.com/clarencemoreno/bloomturtle/internal/ratelimiter_bloom"
 )
 
 // Storekeeper struct
@@ -43,12 +44,14 @@ func (sk *Storekeeper) Check(key string) bool {
 
 // HandleEvent handles events from the EventPublisher
 func (sk *Storekeeper) HandleEvent(ctx context.Context, event event.Event) error {
+	fmt.Printf("Inside HandleEvent, event type: %T\n", event)
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
 	default:
 		switch e := event.(type) {
-		case ratelimiter.RateLimitEvent:
+		case ratelimiter_bloom.RateLimitEvent:
+			println("ratelimiter.RateLimitEvent")
 			sk.handleRateLimitEvent(e)
 		default:
 			return fmt.Errorf("unknown event type: %T", e)
@@ -58,12 +61,12 @@ func (sk *Storekeeper) HandleEvent(ctx context.Context, event event.Event) error
 }
 
 // handleRateLimitEvent handles RateLimitEvent and updates the cache atomically
-func (sk *Storekeeper) handleRateLimitEvent(e ratelimiter.RateLimitEvent) {
+func (sk *Storekeeper) handleRateLimitEvent(e ratelimiter_bloom.RateLimitEvent) {
 	for {
 		// Atomically load the current violator cache
 		oldCachePtr := atomic.LoadPointer(&sk.violatorCache)
-		oldCache := *(*map[string]ratelimiter.RateLimitEvent)(oldCachePtr)
-		newCache := make(map[string]ratelimiter.RateLimitEvent)
+		oldCache := *(*map[string]ratelimiter_bloom.RateLimitEvent)(oldCachePtr)
+		newCache := make(map[string]ratelimiter_bloom.RateLimitEvent)
 
 		// Copy old cache, ignoring expired items
 		for k, v := range oldCache {
