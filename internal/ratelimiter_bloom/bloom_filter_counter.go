@@ -129,6 +129,12 @@ func (bfc *BloomFilterCounter) CheckCount(key string) int {
 	return int(bfc.bucket[index].counter)
 }
 
+// Counter returns the counter value for the given key.
+func (bfc *BloomFilterCounter) Counter(key string) uint32 {
+	index := bfc.hash(key) % uint64(bfc.size)
+	return bfc.bucket[index].counter
+}
+
 // hash uses a more robust hash function (FNV-1a)
 func (bfc *BloomFilterCounter) hash(key string) uint64 {
 	h := fnv.New64a()
