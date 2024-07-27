@@ -72,6 +72,7 @@ func main2() {
 
 	// Create the RateLimiter
 	rl := ratelimiter_bloom.NewRateLimiter(capacity, rate)
+
 	defer rl.Shutdown(context.Background())
 
 	// Create the Event Publisher
