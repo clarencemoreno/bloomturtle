@@ -21,8 +21,11 @@ func TestStorekeeper_Check(t *testing.T) {
 		}
 	}()
 
-	// Create Storekeeper with the real BaseEventPublisher
-	sk := New(basePublisher)
+	// Create Storekeeper
+	sk := New()
+
+	// Register Storekeeper as a listener to the base publisher
+	basePublisher.AddListener(sk)
 
 	// Check function before publishing the event
 	if sk.Check("key") {
@@ -36,9 +39,6 @@ func TestStorekeeper_Check(t *testing.T) {
 		Timestamp:           time.Now(),
 		ExpirationTimestamp: time.Now().Add(1 * time.Hour),
 	}
-
-	// Register Storekeeper as a listener to the base publisher
-	basePublisher.AddListener(sk)
 
 	// Publish the event
 	err := basePublisher.PublishEvent(limitEvent)
@@ -54,8 +54,4 @@ func TestStorekeeper_Check(t *testing.T) {
 		t.Errorf("expected Check to return true after publishing the event")
 	}
 
-	// // Call shutdown after the final check to ensure proper cleanup
-	// if err := basePublisher.Shutdown(context.Background()); err != nil {
-	// 	t.Fatalf("failed to shutdown publisher: %v", err)
-	// }
 }

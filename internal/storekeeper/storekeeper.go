@@ -14,18 +14,14 @@ import (
 // Storekeeper struct
 type Storekeeper struct {
 	violatorCache unsafe.Pointer // Unsafe pointer to the violator cache
-	eventPub      event.EventPublisher
 }
 
 // New creates a new Storekeeper
-func New(eventPub event.EventPublisher) *Storekeeper {
-	sk := &Storekeeper{
-		eventPub: eventPub,
-	}
+func New() *Storekeeper {
+	sk := &Storekeeper{}
 	// Initialize the violator cache with an empty map
 	initialCache := make(map[string]ratelimiter.RateLimitEvent)
 	sk.violatorCache = unsafe.Pointer(&initialCache)
-	eventPub.AddListener(sk)
 	return sk
 }
 
