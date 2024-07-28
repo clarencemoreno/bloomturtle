@@ -1,6 +1,13 @@
-# Bloomturtle: A Rate Limiter with Bloom Filter and Event-Driven Architecture
 
-Bloomturtle is a Go-based rate limiter that leverages Bloom filters for efficient key lookups and an event-driven architecture for scalability and flexibility. It's designed to handle high-volume requests while minimizing resource consumption.
+<span style="display: inline-block; vertical-align: middle;">
+<img src="assets/bloomturtle_tiny.jpg" alt="Bloomturtle Logo" height="30">
+<h1 style="font-size: 3em; margin-left: 10px;">Bloomturtle</h1>
+</span>
+
+## A Rate Limiter with Bloom Filter and extensible and event-driven architecture
+
+
+Bloomturtle is a Go-based rate limiter that leverages Bloom filters for efficient key lookups and an extensible architecture for scalability and flexibility. It's designed to handle high-volume requests while minimizing resource consumption.
 
 ## Architecture
 
@@ -25,7 +32,12 @@ The project is organized into the following packages:
 - **Scalable and Flexible:** The event-driven architecture allows for easy integration with other systems and enables scaling by adding more listeners.
 - **Customizable Rate Limits:** Bloomturtle allows you to configure the rate limit parameters, such as the capacity and rate.
 - **Event-Driven Monitoring:** The EventPublisher enables you to monitor rate limiting events and build custom dashboards or alerts.
-
+- **Constant-Time Queries:** Bloomturtle prioritizes constant-time query performance, ensuring consistent response times even under heavy load.
+- **Background Processing:** Rate limiting calculations are handled in the background, minimizing the impact on request processing.
+- **Global Rate Limiting:** Bloomturtle supports optional global rate limiting functionality using external data sources, allowing for centralized control.
+- **In-Memory Cache:** Each data source (local or external) contributes to an in-memory cache on every node/server, ensuring fast access to rate limit information.
+- **Timespan-Based Excess Control:** Bloomturtle uses a timespan to control excess requests instead of relying on a fixed number, providing more flexibility.
+- **Bloom Filter Optimization:** Bloom filters are used to filter out unnecessary in-memory storage and processing, reducing resource consumption and improving performance.
 ## Getting Started
 
 ### Installation
